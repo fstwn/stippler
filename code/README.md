@@ -78,6 +78,13 @@ and Pillow (Rhino-friendly); matplotlib is used only for preview rendering.
    uneven. This is the single biggest dial.
    * `--n_iter n` — hard cap on iterations (lower = looser).
    * `--epsilon d` — optional: stop when mean point movement drops below `d`.
+
+To control **contrast** (denser blacks / cleaner whites), use `--gamma g`. It
+applies a power curve `d ** g` to the density that drives point placement,
+relaxation and dot size, so `g > 1` (e.g. `2.0`–`2.5`) concentrates the same
+`n_point` dots into the dark areas and thins the light ones; `g < 1` flattens
+the tonal range; `g = 1` is the original linear mapping. (`--threshold` is a
+blunter, hard cutoff that forces lighter greys to pure white.)
 2. **Varying dot size** — a min/max radius spread plus per-dot random jitter
    breaks the constant-radius "machine stipple" giveaway.
    * `--pointsize min max` — radius range (density drives the base size).

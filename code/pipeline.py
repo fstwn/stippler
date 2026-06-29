@@ -44,13 +44,20 @@ def normalize(D):
     return np.zeros_like(D)
 
 
-def load_density(filename, n_point, threshold=255):
+def load_density(filename, n_point, threshold=255, gamma=1.0):
     """Load a grayscale image and turn it into a stippling density field.
 
     The image is resized so that each of the ``n_point`` Voronoi regions
     covers ~500 pixels (matching the original stippler), thresholded, inverted
     (dark ink = high density) and flipped vertically so that the point space
     uses a conventional y-up convention.
+
+    ``gamma`` applies a power curve to the inverted density (``d ** gamma``),
+    which controls contrast. Because this single field governs how many points
+    land in a region, how the relaxation pulls them and each dot's radius,
+    ``gamma > 1`` thins mid/light tones and concentrates dots into the dark
+    areas (denser blacks, higher contrast); ``gamma < 1`` does the opposite.
+    ``gamma == 1`` is the original linear mapping.
 
     Returns
     -------
@@ -71,6 +78,8 @@ def load_density(filename, n_point, threshold=255):
     density = np.minimum(density, threshold)
 
     density = 1.0 - normalize(density)
+    if gamma != 1.0:
+        density = np.power(density, gamma)
     density = density[::-1, :]
     density_P = density.cumsum(axis=1)
     density_Q = density_P.cumsum(axis=1)
@@ -223,9 +232,10 @@ class StippleResult(object):
         return self.density.shape[0]
 
 
-def stipple(filename, n_point=5000, n_iter=50, threshold=255, epsilon=0.0,
-            r_min=1.0, r_max=1.0, size_jitter=0.0, position_jitter=0.0,
-            edge_segments=16, edge_noise=0.0, seed=None, progress=False):
+def stipple(filename, n_point=5000, n_iter=50, threshold=255, gamma=1.0,
+            epsilon=0.0, r_min=1.0, r_max=1.0, size_jitter=0.0,
+            position_jitter=0.0, edge_segments=16, edge_noise=0.0,
+            seed=None, progress=False):
     """Run the full grayscale-image -> stipple-geometry pipeline.
 
     All length parameters (`r_min`, `r_max`, `position_jitter`, `epsilon`) are
@@ -235,7 +245,8 @@ def stipple(filename, n_point=5000, n_iter=50, threshold=255, epsilon=0.0,
     """
     rng = np.random.default_rng(seed)
 
-    density, density_P, density_Q = load_density(filename, n_point, threshold)
+    density, density_P, density_Q = load_density(
+        filename, n_point, threshold, gamma)
     points = initialization(n_point, density, rng)
     points = relax(points, density, density_P, density_Q,
                    n_iter=n_iter, epsilon=epsilon, progress=progress)
@@ -332,6 +343,9 @@ def _build_parser():
                         "(<=0 disables; n_iter alone governs)")
     p.add_argument("--threshold", metavar="n", type=int, default=255,
                    help="Grey level threshold (brighter = white)")
+    p.add_argument("--gamma", metavar="g", type=float, default=1.0,
+                   help="Contrast curve on density. >1 = denser blacks / "
+                        "higher contrast, <1 = flatter, 1 = linear")
     p.add_argument("--pointsize", metavar=("min", "max"), type=float, nargs=2,
                    default=(1.0, 1.0),
                    help="Min/max dot radius (density-pixel units)")
@@ -365,6 +379,7 @@ def main(argv=None):
         n_point=args.n_point,
         n_iter=args.n_iter,
         threshold=args.threshold,
+        gamma=args.gamma,
         epsilon=args.epsilon,
         r_min=args.pointsize[0],
         r_max=args.pointsize[1],
