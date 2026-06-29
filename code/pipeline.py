@@ -1,0 +1,400 @@
+#! /usr/bin/env python3
+# -----------------------------------------------------------------------------
+# Hand-drawn Weighted Voronoi Stippling pipeline
+#
+# Builds on the weighted Voronoi stippler by Nicolas P. Rougier (BSD), itself a
+# replication of "Weighted Voronoi Stippling", Adrian Secord, NPAR 2002.
+#
+# This module wraps the relaxation in a grayscale-image -> stipple-output
+# pipeline and adds three controls that make the result read as hand drawn
+# rather than machine generated:
+#
+#   1. Early-stopped relaxation. Fewer Lloyd iterations means the points never
+#      settle into the regular hexagonal lattice, so local spacing stays
+#      slightly uneven. This is the single biggest dial (`n_iter`, `epsilon`).
+#   2. Varying dot size. A min/max radius spread plus per-dot random jitter
+#      breaks the mechanical uniformity of constant-radius dots (`r_min`,
+#      `r_max`, `size_jitter`).
+#   3. Imperfect placement and edges. A little Gaussian positional jitter
+#      (`position_jitter`) plus wobbly, non-mathematically-circular dot
+#      outlines (`edge_noise`, `edge_segments`).
+#
+# Targets Python 3.9.10 to stay compatible with the Rhino 8 CPython runtime.
+# The compute core (everything except `render_*`) depends only on numpy, scipy
+# and Pillow; matplotlib is imported lazily and only for rasterized/vector
+# preview rendering.
+# -----------------------------------------------------------------------------
+import os
+import numpy as np
+import scipy.ndimage
+import scipy.spatial
+from PIL import Image
+
+import voronoi
+
+
+# -----------------------------------------------------------------------------
+# Density preparation
+# -----------------------------------------------------------------------------
+def normalize(D):
+    """Scale array into [0, 1]; return zeros if (near) constant."""
+    Vmin, Vmax = D.min(), D.max()
+    if Vmax - Vmin > 1e-5:
+        return (D - Vmin) / (Vmax - Vmin)
+    return np.zeros_like(D)
+
+
+def load_density(filename, n_point, threshold=255):
+    """Load a grayscale image and turn it into a stippling density field.
+
+    The image is resized so that each of the ``n_point`` Voronoi regions
+    covers ~500 pixels (matching the original stippler), thresholded, inverted
+    (dark ink = high density) and flipped vertically so that the point space
+    uses a conventional y-up convention.
+
+    Returns
+    -------
+    density : (H, W) float array in [0, 1]
+    density_P, density_Q : cumulative-sum helper arrays used by the fast
+        weighted-centroid computation in ``voronoi.py``.
+    """
+    img = Image.open(filename).convert("L")
+    density = np.asarray(img, dtype=np.float64)
+
+    # ~500 pixels per Voronoi region.
+    zoom = (n_point * 500) / (density.shape[0] * density.shape[1])
+    zoom = int(round(np.sqrt(zoom)))
+    zoom = max(zoom, 1)
+    density = scipy.ndimage.zoom(density, zoom, order=0)
+
+    # Anything brighter than the threshold is treated as white (no ink).
+    density = np.minimum(density, threshold)
+
+    density = 1.0 - normalize(density)
+    density = density[::-1, :]
+    density_P = density.cumsum(axis=1)
+    density_Q = density_P.cumsum(axis=1)
+    return density, density_P, density_Q
+
+
+def initialization(n, density, rng):
+    """Rejection-sample ``n`` points with probability proportional to density.
+
+    Points are returned in [0, W] x [0, H] (x, y), y-up.
+    """
+    samples = []
+    while len(samples) < n:
+        X = rng.uniform(0, density.shape[1], 10 * n)
+        Y = rng.uniform(0, density.shape[0], 10 * n)
+        P = rng.uniform(0, 1, 10 * n)
+        index = 0
+        while index < len(X) and len(samples) < n:
+            x, y = X[index], Y[index]
+            x_, y_ = int(np.floor(x)), int(np.floor(y))
+            if P[index] < density[y_, x_]:
+                samples.append([x, y])
+            index += 1
+    return np.array(samples)
+
+
+# -----------------------------------------------------------------------------
+# Feature 1: relaxation with early stopping
+# -----------------------------------------------------------------------------
+def relax(points, density, density_P, density_Q,
+          n_iter=50, epsilon=0.0, progress=False):
+    """Run Lloyd relaxation (weighted Voronoi centroids), stopping early.
+
+    Two independent ways to stop early:
+
+    * ``n_iter`` -- the hard cap. Lowering it is the primary dial: with few
+      iterations the points never reach the regular lattice, so spacing stays
+      organically uneven.
+    * ``epsilon`` -- optional convergence detector. When the mean displacement
+      of the configuration between two iterations drops below ``epsilon``
+      (in density-pixel units) the relaxation stops. ``epsilon <= 0`` disables
+      it, so ``n_iter`` alone governs the result.
+
+    Displacement is measured order-independently via nearest-neighbour matching
+    (the centroid list is not in the same order as the input points).
+    """
+    iterator = range(n_iter)
+    if progress:
+        try:
+            import tqdm
+            iterator = tqdm.trange(n_iter)
+        except ImportError:
+            pass
+
+    for _ in iterator:
+        prev = points
+        regions, points = voronoi.centroids(
+            points, density, density_P, density_Q)
+        if epsilon > 0 and len(prev) and len(points):
+            tree = scipy.spatial.cKDTree(prev)
+            dist, _idx = tree.query(points, k=1)
+            if dist.mean() < epsilon:
+                break
+    return points
+
+
+# -----------------------------------------------------------------------------
+# Feature 2: varying dot size
+# -----------------------------------------------------------------------------
+def assign_radii(points, density, r_min, r_max, size_jitter=0.0, rng=None):
+    """Assign a radius (density-pixel units) to every point.
+
+    The base radius is driven by local density (darker -> bigger), mapped into
+    ``[r_min, r_max]``. ``size_jitter`` then adds per-dot multiplicative noise
+    so that, even at equal density, real nib/pressure variation is mimicked and
+    the tell-tale constant-radius look disappears. Results are clamped to
+    ``[r_min, r_max]``.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    Pi = points.astype(int)
+    X = np.clip(Pi[:, 0], 0, density.shape[1] - 1)
+    Y = np.clip(Pi[:, 1], 0, density.shape[0] - 1)
+    d = density[Y, X]
+
+    radii = r_min + (r_max - r_min) * d
+    if size_jitter > 0:
+        radii = radii * (1.0 + rng.normal(0.0, size_jitter, len(radii)))
+    return np.clip(radii, r_min, r_max)
+
+
+# -----------------------------------------------------------------------------
+# Feature 3: positional jitter + imperfect (wobbly) dot outlines
+# -----------------------------------------------------------------------------
+def apply_position_jitter(points, sigma, rng=None):
+    """Add isotropic Gaussian noise (std ``sigma``, density-pixel units)."""
+    if sigma <= 0:
+        return points
+    if rng is None:
+        rng = np.random.default_rng()
+    return points + rng.normal(0.0, sigma, points.shape)
+
+
+def dot_polygons(points, radii, edge_segments=16, edge_noise=0.0, rng=None):
+    """Return one wobbly closed polygon per dot approximating a circle.
+
+    Each dot is an ``edge_segments``-gon whose vertex angles are slightly
+    jittered and whose per-vertex radius is perturbed by ``edge_noise`` (a
+    fraction of the dot radius). With ``edge_noise == 0`` and a high segment
+    count the dots are effectively perfect circles; small values give the
+    organic, hand-inked edge.
+
+    Returns a list of (edge_segments, 2) float arrays.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    base = np.linspace(0, 2 * np.pi, edge_segments, endpoint=False)
+    polygons = []
+    for (cx, cy), r in zip(points, radii):
+        ang = base + rng.normal(0.0, np.pi / edge_segments * edge_noise,
+                                edge_segments)
+        rad = r * (1.0 + rng.normal(0.0, edge_noise, edge_segments))
+        rad = np.maximum(rad, 0.0)
+        xs = cx + rad * np.cos(ang)
+        ys = cy + rad * np.sin(ang)
+        polygons.append(np.column_stack([xs, ys]))
+    return polygons
+
+
+# -----------------------------------------------------------------------------
+# End-to-end pipeline
+# -----------------------------------------------------------------------------
+class StippleResult(object):
+    """Plain container for the geometry produced by :func:`stipple`."""
+
+    def __init__(self, points, radii, polygons, density):
+        self.points = points        # (n, 2) float, y-up, density-pixel coords
+        self.radii = radii          # (n,)  float, density-pixel units
+        self.polygons = polygons    # list of (edge_segments, 2) float arrays
+        self.density = density       # (H, W) float density field used
+
+    @property
+    def width(self):
+        return self.density.shape[1]
+
+    @property
+    def height(self):
+        return self.density.shape[0]
+
+
+def stipple(filename, n_point=5000, n_iter=50, threshold=255, epsilon=0.0,
+            r_min=1.0, r_max=1.0, size_jitter=0.0, position_jitter=0.0,
+            edge_segments=16, edge_noise=0.0, seed=None, progress=False):
+    """Run the full grayscale-image -> stipple-geometry pipeline.
+
+    All length parameters (`r_min`, `r_max`, `position_jitter`, `epsilon`) are
+    in density-pixel units of the internally resized image. See module docstring
+    for what each control does. Returns a :class:`StippleResult`; rendering to a
+    file is a separate step (:func:`render_matplotlib` / :func:`render_svg`).
+    """
+    rng = np.random.default_rng(seed)
+
+    density, density_P, density_Q = load_density(filename, n_point, threshold)
+    points = initialization(n_point, density, rng)
+    points = relax(points, density, density_P, density_Q,
+                   n_iter=n_iter, epsilon=epsilon, progress=progress)
+
+    # Radii are sampled before positional jitter so dot size still reflects the
+    # tone the dot actually settled on.
+    radii = assign_radii(points, density, r_min, r_max, size_jitter, rng)
+    points = apply_position_jitter(points, position_jitter, rng)
+    polygons = dot_polygons(points, radii, edge_segments, edge_noise, rng)
+
+    return StippleResult(points, radii, polygons, density)
+
+
+# -----------------------------------------------------------------------------
+# Rendering (matplotlib only; not needed by the compute core)
+# -----------------------------------------------------------------------------
+def render_matplotlib(result, filename, figsize=8, dpi=300, color="black",
+                      background="white"):
+    """Rasterize/vectorize the dots as filled wobbly polygons.
+
+    The file extension of ``filename`` chooses the format (.png, .pdf, .svg).
+    Dots are drawn as polygons (not scatter markers) so the imperfect edges
+    from ``edge_noise`` are preserved.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import PolyCollection
+
+    W, H = result.width, result.height
+    ratio = W / H
+    fig = plt.figure(figsize=(figsize, figsize / ratio), facecolor=background)
+    ax = fig.add_axes([0, 0, 1, 1], frameon=False)
+    ax.set_xlim(0, W)
+    ax.set_ylim(0, H)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_aspect("equal")
+
+    collection = PolyCollection(result.polygons, facecolors=color,
+                                edgecolors="none", antialiased=True)
+    ax.add_collection(collection)
+
+    fig.savefig(filename, dpi=dpi, facecolor=background)
+    plt.close(fig)
+    return filename
+
+
+def render_svg(result, filename, color="black", background="white"):
+    """Write a minimal standalone SVG of the wobbly dot polygons.
+
+    Dependency-free (no matplotlib); handy for the Rhino-bound workflow where
+    the geometry, not a raster, is the deliverable. y is flipped so the SVG
+    matches the y-up point space visually.
+    """
+    W, H = result.width, result.height
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<svg xmlns="http://www.w3.org/2000/svg" '
+             'width="%d" height="%d" viewBox="0 0 %d %d">' % (W, H, W, H),
+             '<rect width="%d" height="%d" fill="%s"/>' % (W, H, background)]
+    for poly in result.polygons:
+        pts = " ".join("%.2f,%.2f" % (x, H - y) for x, y in poly)
+        lines.append('<polygon points="%s" fill="%s"/>' % (pts, color))
+    lines.append("</svg>")
+    with open(filename, "w") as fh:
+        fh.write("\n".join(lines))
+    return filename
+
+
+def save_points(result, filename):
+    """Persist points + radii as a (n, 3) .npy array (x, y, radius)."""
+    data = np.column_stack([result.points, result.radii])
+    np.save(filename, data)
+    return filename
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
+def _build_parser():
+    import argparse
+    p = argparse.ArgumentParser(
+        description="Hand-drawn weighted Voronoi stippler "
+                    "(grayscale image -> stipple output)")
+    p.add_argument("filename", metavar="image", type=str,
+                   help="Grayscale density image")
+    p.add_argument("--n_point", metavar="n", type=int, default=5000,
+                   help="Number of stipple dots")
+    p.add_argument("--n_iter", metavar="n", type=int, default=50,
+                   help="Max relaxation iterations. Lower = looser, more "
+                        "uneven (hand-drawn) spacing")
+    p.add_argument("--epsilon", metavar="d", type=float, default=0.0,
+                   help="Early-stop when mean point movement < d "
+                        "(<=0 disables; n_iter alone governs)")
+    p.add_argument("--threshold", metavar="n", type=int, default=255,
+                   help="Grey level threshold (brighter = white)")
+    p.add_argument("--pointsize", metavar=("min", "max"), type=float, nargs=2,
+                   default=(1.0, 1.0),
+                   help="Min/max dot radius (density-pixel units)")
+    p.add_argument("--size_jitter", metavar="f", type=float, default=0.0,
+                   help="Per-dot radius noise as a fraction (e.g. 0.15)")
+    p.add_argument("--position_jitter", metavar="s", type=float, default=0.0,
+                   help="Gaussian positional noise std (density-pixel units)")
+    p.add_argument("--edge_segments", metavar="n", type=int, default=16,
+                   help="Vertices per dot outline")
+    p.add_argument("--edge_noise", metavar="f", type=float, default=0.0,
+                   help="Dot-edge wobble as a fraction of radius (e.g. 0.08)")
+    p.add_argument("--figsize", metavar="w", type=float, default=8,
+                   help="Output figure width (inches)")
+    p.add_argument("--dpi", metavar="n", type=int, default=300,
+                   help="Raster output DPI")
+    p.add_argument("--seed", metavar="n", type=int, default=None,
+                   help="Random seed for reproducibility")
+    p.add_argument("--out", metavar="path", type=str, default=None,
+                   help="Output path (.png/.pdf/.svg). Default: "
+                        "<image>-stipple.png next to the input")
+    p.add_argument("--save_points", action="store_true",
+                   help="Also save <out>.npy with (x, y, radius)")
+    return p
+
+
+def main(argv=None):
+    args = _build_parser().parse_args(argv)
+
+    result = stipple(
+        args.filename,
+        n_point=args.n_point,
+        n_iter=args.n_iter,
+        threshold=args.threshold,
+        epsilon=args.epsilon,
+        r_min=args.pointsize[0],
+        r_max=args.pointsize[1],
+        size_jitter=args.size_jitter,
+        position_jitter=args.position_jitter,
+        edge_segments=args.edge_segments,
+        edge_noise=args.edge_noise,
+        seed=args.seed,
+        progress=True,
+    )
+
+    out = args.out
+    if out is None:
+        dirname = os.path.dirname(args.filename)
+        base = os.path.basename(args.filename).split(".")[0]
+        out = os.path.join(dirname, base + "-stipple.png")
+
+    ext = os.path.splitext(out)[1].lower()
+    if ext == ".svg":
+        render_svg(result, out)
+    else:
+        render_matplotlib(result, out, figsize=args.figsize, dpi=args.dpi)
+    print("Wrote %s (%d dots, %dx%d)" % (
+        out, len(result.points), result.width, result.height))
+
+    if args.save_points:
+        npy = os.path.splitext(out)[0] + ".npy"
+        save_points(result, npy)
+        print("Wrote %s" % npy)
+
+
+if __name__ == "__main__":
+    main()

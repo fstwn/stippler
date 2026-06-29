@@ -42,9 +42,20 @@
 import tqdm
 import voronoi
 import os.path
-import scipy.misc
-import scipy.ndimage
 import numpy as np
+import scipy.ndimage
+from PIL import Image
+
+
+def imread(filename):
+    """Load an image as a 2D float grayscale array.
+
+    Replaces the removed ``scipy.misc.imread(..., flatten=True, mode='L')``
+    so the code runs on modern SciPy / Python 3.9.10 (Rhino CPython runtime).
+    """
+    img = Image.open(filename).convert("L")
+    return np.asarray(img, dtype=np.float64)
+
 
 def normalize(D):
     Vmin, Vmax = D.min(), D.max()
@@ -135,7 +146,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     filename = args.filename
-    density = scipy.misc.imread(filename, flatten=True, mode='L')
+    density = imread(filename)
 
     # We want (approximately) 500 pixels per voronoi region
     zoom = (args.n_point * 500) / (density.shape[0]*density.shape[1])
