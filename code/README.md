@@ -41,10 +41,34 @@ conda create -n stippler -c conda-forge python=3.9.10 numpy scipy matplotlib pil
 Original data is in the data directory and you can also obtain it from
 [Adrian Secord homepage](http://cs.nyu.edu/~ajsecord/npar2002/StipplingOriginals.zip).
 
-## Usage
+## Installation
+
+The code in this folder is a pip-installable package named `stippler`. Because
+it lives in the `code/` subdirectory, install it from GitHub with the
+`subdirectory` fragment, pinning the branch after `@`:
 
 ```
- usage: stippler.py [--n_iter n] [--n_point n] [--save] [--force]
+pip install "git+https://github.com/fstwn/stippler.git@python39-rhino-port#subdirectory=code"
+```
+
+(Replace the owner with your own fork if you pushed the branch there.) Or, from
+a local clone:
+
+```
+pip install ./code            # or: pip install -e ./code   (editable)
+```
+
+This installs the dependencies (numpy, scipy, Pillow, tqdm, matplotlib), the
+importable package `stippler`, and a `stippler` console command.
+
+## Usage (classic stippler)
+
+The original replication CLI is preserved as the `stippler.classic` module
+(run it with `python -m stippler.classic ...`):
+
+```
+ usage: python -m stippler.classic
+                    [--n_iter n] [--n_point n] [--save] [--force]
                     [--pointsize min,max] [--figsize w,h]
                     [--display] [--interactive] file
 
@@ -66,12 +90,13 @@ Original data is in the data directory and you can also obtain it from
    --interactive         Display intermediate results (slower)
 ```
 
-## Hand-drawn pipeline (`pipeline.py`)
+## Hand-drawn pipeline (`stippler` command)
 
-`pipeline.py` wraps the relaxation in a grayscale-image → stipple-output
-pipeline and adds three controls that make the result read as *hand drawn*
-rather than machine generated. The compute core depends only on numpy, scipy
-and Pillow (Rhino-friendly); matplotlib is used only for preview rendering.
+The `stippler` console command (module `stippler.pipeline`) wraps the relaxation
+in a grayscale-image → stipple-output pipeline and adds three controls that make
+the result read as *hand drawn* rather than machine generated. The compute core
+depends only on numpy, scipy and Pillow (Rhino-friendly); matplotlib is used
+only for preview rendering.
 
 1. **Early-stopped relaxation** — fewer Lloyd iterations means the points never
    settle into the regular hexagonal lattice, so spacing stays organically
@@ -98,12 +123,12 @@ blunter, hard cutoff that forces lighter greys to pure white.)
 Output format follows the `--out` extension (`.png`, `.pdf`, `.svg`).
 
 ```
-python pipeline.py ../data/boots.jpg --n_point 12000 --n_iter 8 \
-       --pointsize 0.8 3.0 --size_jitter 0.2 --position_jitter 0.5 \
-       --edge_noise 0.09 --seed 3 --out ../data/boots-stipple.png
+stippler data/boots.jpg --n_point 12000 --n_iter 8 \
+         --pointsize 0.8 3.0 --size_jitter 0.2 --position_jitter 0.5 \
+         --edge_noise 0.09 --seed 3 --out data/boots-stipple.png
 ```
 
-The pipeline can also be imported as a library: `pipeline.stipple(...)` returns
+The pipeline can also be imported as a library: `stippler.stipple(...)` returns
 a `StippleResult` carrying `points`, `radii` and per-dot `polygons` (handy for
 feeding geometry into Rhino later), which `render_matplotlib`, `render_svg` and
 `save_points` consume.

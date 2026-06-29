@@ -40,11 +40,15 @@
 #   --interactive         Display intermediate results (slower)
 # -----------------------------------------------------------------------------
 import tqdm
-import voronoi
 import os.path
 import numpy as np
 import scipy.ndimage
 from PIL import Image
+
+try:
+    from . import voronoi
+except ImportError:  # allow running the file directly (python classic.py)
+    import voronoi
 
 
 def imread(filename):

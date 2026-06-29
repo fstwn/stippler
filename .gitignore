@@ -7,3 +7,7 @@ __pycache__
 *.out
 *.run.xml
 *.blg
+*.egg-info/
+build/
+dist/
+*.egg

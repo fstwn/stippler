@@ -30,7 +30,10 @@ import scipy.ndimage
 import scipy.spatial
 from PIL import Image
 
-import voronoi
+try:
+    from . import voronoi
+except ImportError:  # allow running the file directly (python pipeline.py)
+    import voronoi
 
 
 # -----------------------------------------------------------------------------
