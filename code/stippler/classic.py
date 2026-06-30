@@ -98,7 +98,6 @@ def initialization(n, D):
     return np.array(samples)
 
 
-
 if __name__ == '__main__':
     import argparse
     import matplotlib.pyplot as plt
@@ -186,7 +185,6 @@ if __name__ == '__main__':
     print("            (PNG): %s " % png_filename)
     print("            (DAT): %s " % dat_filename)
 
-        
     xmin, xmax = 0, density.shape[1]
     ymin, ymax = 0, density.shape[0]
     bbox = np.array([xmin, xmax, ymin, ymax])
@@ -209,7 +207,12 @@ if __name__ == '__main__':
         def update(frame):
             global points
             # Recompute weighted centroids
-            regions, points = voronoi.centroids(points, density, density_P, density_Q)
+            regions, points = voronoi.centroids(
+                points,
+                density,
+                density_P,
+                density_Q
+            )
 
             # Update figure
             Pi = points.astype(int)
@@ -223,7 +226,7 @@ if __name__ == '__main__':
 
             # Save result at last frame
             if (frame == args.n_iter-2 and
-                      (not os.path.exists(dat_filename) or args.save)):
+                    (not os.path.exists(dat_filename) or args.save)):
                 np.save(dat_filename, points)
                 plt.savefig(pdf_filename)
                 plt.savefig(png_filename)
@@ -235,9 +238,13 @@ if __name__ == '__main__':
 
     elif not os.path.exists(dat_filename) or args.force:
         for i in tqdm.trange(args.n_iter):
-            regions, points = voronoi.centroids(points, density, density_P, density_Q)
+            regions, points = voronoi.centroids(
+                points,
+                density,
+                density_P,
+                density_Q
+            )
 
-            
     if (args.save or args.display) and not args.interactive:
         fig = plt.figure(figsize=(args.figsize, args.figsize/ratio),
                          facecolor="white")
@@ -246,7 +253,7 @@ if __name__ == '__main__':
         ax.set_xticks([])
         ax.set_ylim([ymin, ymax])
         ax.set_yticks([])
-        scatter = ax.scatter(points[:, 0], points[:, 1], s=1, 
+        scatter = ax.scatter(points[:, 0], points[:, 1], s=1,
                              facecolor="k", edgecolor="None")
         Pi = points.astype(int)
         X = np.maximum(np.minimum(Pi[:, 0], density.shape[1]-1), 0)

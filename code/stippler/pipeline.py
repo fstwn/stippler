@@ -132,7 +132,10 @@ def prepare_density(
 
     gx = gy = grad_mag = normals = None
     if illustration.active:
-        gx, gy, grad_mag = compute_image_gradient(tone, illustration.gradient_sigma)
+        gx, gy, grad_mag = compute_image_gradient(
+            tone,
+            illustration.gradient_sigma
+        )
         normals = resolve_normals(tone, gx, gy, normal_rgb)
         density = build_illustration_density(
             tone,
@@ -332,9 +335,10 @@ def stipple(filename, n_point=5000, n_iter=50, threshold=255, gamma=1.0,
     """Run the full grayscale-image -> stipple-geometry pipeline.
 
     All length parameters (`r_min`, `r_max`, `position_jitter`, `epsilon`) are
-    in density-pixel units of the internally resized image. See module docstring
-    for what each control does. Returns a :class:`StippleResult`; rendering to a
-    file is a separate step (:func:`render_matplotlib` / :func:`render_svg`).
+    in density-pixel units of the internally resized image. See module
+    docstring for what each control does. Returns a :class:`StippleResult`;
+    rendering to a file is a separate step
+    (:func:`render_matplotlib` / :func:`render_svg`).
 
     Optional scientific-illustration controls (Lu et al.) are enabled by
     passing an :class:`IllustrationParams` instance as ``illustration``, plus
@@ -367,7 +371,9 @@ def stipple(filename, n_point=5000, n_iter=50, threshold=255, gamma=1.0,
 
     grad_mag = context["grad_mag"]
     grad_size_strength = (
-        illustration.gradient_size_strength if illustration.gradient_size else 0.0
+        illustration.gradient_size_strength
+        if illustration.gradient_size
+        else 0.0
     )
     # Radii are sampled before positional jitter so dot size still reflects the
     # tone the dot actually settled on.
@@ -549,7 +555,9 @@ def _add_illustration_args(p):
     g.add_argument("--normal-map", type=str, default=None, metavar="path",
                    help="RGB normal map aligned with the beauty pass")
     g.add_argument("--gradient-sigma", type=float, default=1.0, metavar="s",
-                   help="Gaussian sigma for gradient/LOG features (default: 1)")
+                   help=(
+                    "Gaussian sigma for gradient/LOG features (default: 1)"
+                    ))
     g.add_argument("--gradient-size", action="store_true",
                    help="Scale dot radius by local gradient magnitude")
     g.add_argument("--gradient-size-strength", type=float, default=1.0,

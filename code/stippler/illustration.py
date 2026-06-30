@@ -147,7 +147,11 @@ def compute_image_gradient(field, sigma=1.0):
 
 def compute_log(field, sigma=1.0):
     """Laplacian-of-Gaussian response (used for silhouette-curve detection)."""
-    blurred = scipy.ndimage.gaussian_filter(field, sigma) if sigma > 0 else field
+    blurred = (
+        scipy.ndimage.gaussian_filter(field, sigma)
+        if sigma > 0
+        else field
+    )
     return scipy.ndimage.laplace(blurred)
 
 
@@ -202,29 +206,47 @@ def build_illustration_density(
     normals_from_map=False,
     depth01=None,
 ):
-    """Combine tone with optional illustration factors into one density field."""
+    """
+    Combine tone with optional illustration factors into one density field.
+    """
     if not params.active:
         return tone
 
     if grad_mag is None or gx is None or gy is None:
         gx, gy, grad_mag = compute_image_gradient(tone, params.gradient_sigma)
     if normals is None and (
-        params.silhouette_density or params.lighting or params.silhouette_curves
+        params.silhouette_density
+        or params.lighting
+        or params.silhouette_curves
     ):
         normals = normals_from_gradient(gx, gy)
 
     density = tone.copy()
     if params.boundary:
         density *= boundary_factor(
-            tone, grad_mag, params.boundary_kgc, params.boundary_kgs, params.boundary_kge
+            tone,
+            grad_mag,
+            params.boundary_kgc,
+            params.boundary_kgs,
+            params.boundary_kge
         )
     if params.silhouette_density:
         if normals_from_map:
-            sil = 1.0 - np.clip(np.abs(np.sum(normals * params.view, axis=-1)), 0.0, 1.0)
+            sil = (
+                1.0 - np.clip(
+                    np.abs(np.sum(normals * params.view, axis=-1)),
+                    0.0,
+                    1.0
+                )
+            )
         else:
             sil = grad_mag
         density *= silhouette_factor(
-            tone, sil, params.silhouette_ksc, params.silhouette_kss, params.silhouette_kse
+            tone,
+            sil,
+            params.silhouette_ksc,
+            params.silhouette_kss,
+            params.silhouette_kse
         )
     if params.interior:
         density *= interior_factor(grad_mag, params.interior_kte)
@@ -273,7 +295,10 @@ def extract_silhouette_curves(tone, gx, gy, grad_mag, params, normals=None,
 
     ys, xs = np.where(mask)
     if params.curve_stride > 1:
-        keep = (xs % params.curve_stride == 0) & (ys % params.curve_stride == 0)
+        keep = (
+            (xs % params.curve_stride == 0) &
+            (ys % params.curve_stride == 0)
+        )
         xs = xs[keep]
         ys = ys[keep]
 

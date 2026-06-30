@@ -2,8 +2,10 @@
 # Weighted Voronoi Stippler
 # Copyright (2017) Nicolas P. Rougier - BSD license
 # -----------------------------------------------------------------------------
+
 import numpy as np
 import scipy.spatial
+
 
 def rasterize(V):
     """
@@ -24,8 +26,8 @@ def rasterize(V):
     X, Y = V[:, 0], V[:, 1]
     ymin = int(np.ceil(Y.min()))
     ymax = int(np.floor(Y.max()))
-    #ymin = int(np.round(Y.min()))
-    #ymax = int(np.round(Y.max()))
+    # ymin = int(np.round(Y.min()))
+    # ymax = int(np.round(Y.max()))
     P = []
     for y in range(ymin, ymax+1):
         segments = []
@@ -76,7 +78,7 @@ def rasterize_outline(V):
     for y in range(ymin, ymax+1):
         segments = []
         for i in range(n):
-            index1, index2 = (i-1) % n , i
+            index1, index2 = (i-1) % n, i
             y1, y2 = Y[index1], Y[index2]
             x1, x2 = X[index1], X[index2]
             if y1 > y2:
@@ -108,20 +110,19 @@ def weighted_centroid_outline(V, P, Q):
     finding the center of mass over all the rasterized points.
     """
 
-    O = rasterize_outline(V)
-    X1, X2, Y = O[:,0], O[:,1], O[:,2]
+    outline = rasterize_outline(V)
+    X1, X2, Y = outline[:, 0], outline[:, 1], outline[:, 2]
 
     Y = np.minimum(Y, P.shape[0]-1)
     X1 = np.minimum(X1, P.shape[1]-1)
     X2 = np.minimum(X2, P.shape[1]-1)
-        
-    d = (P[Y,X2]-P[Y,X1]).sum()
-    x = ((X2*P[Y,X2] - Q[Y,X2]) - (X1*P[Y,X1] - Q[Y,X1])).sum()
-    y = (Y * (P[Y,X2] - P[Y,X1])).sum()
+
+    d = (P[Y, X2]-P[Y, X1]).sum()
+    x = ((X2*P[Y, X2] - Q[Y, X2]) - (X1*P[Y, X1] - Q[Y, X1])).sum()
+    y = (Y * (P[Y, X2] - P[Y, X1])).sum()
     if d:
         return [x/d, y/d]
     return [x, y]
-    
 
 
 def uniform_centroid(V):
@@ -161,11 +162,13 @@ def weighted_centroid(V, D):
     return ((P*D)).sum(axis=0) / D.sum()
 
 
-
-
-# http://stackoverflow.com/questions/28665491/...
-#    ...getting-a-bounded-polygon-coordinates-from-voronoi-cells
 def in_box(points, bbox):
+    """
+    Check for box containment
+
+    http://stackoverflow.com/questions/28665491/...
+    ...getting-a-bounded-polygon-coordinates-from-voronoi-cells
+    """
     return np.logical_and(
         np.logical_and(bbox[0] <= points[:, 0], points[:, 0] <= bbox[1]),
         np.logical_and(bbox[2] <= points[:, 1], points[:, 1] <= bbox[3]))
@@ -175,7 +178,7 @@ def voronoi(points, bbox):
     # See http://stackoverflow.com/questions/28665491/...
     #   ...getting-a-bounded-polygon-coordinates-from-voronoi-cells
     # See also https://gist.github.com/pv/8036995
-    
+
     # Select points inside the bounding box
     i = in_box(points, bbox)
 
@@ -208,8 +211,8 @@ def voronoi(points, bbox):
             else:
                 x = vor.vertices[index, 0]
                 y = vor.vertices[index, 1]
-                if not(bbox[0]-epsilon <= x <= bbox[1]+epsilon and
-                       bbox[2]-epsilon <= y <= bbox[3]+epsilon):
+                if not (bbox[0] - epsilon <= x <= bbox[1] + epsilon and
+                        bbox[2] - epsilon <= y <= bbox[3] + epsilon):
                     flag = False
                     break
         if region != [] and flag:
@@ -225,11 +228,11 @@ def centroids(points, density, density_P=None, density_Q=None):
     centroids.
     """
 
-    X, Y = points[:,0], points[:, 1]
+    # X, Y = points[:, 0], points[:, 1]
     # You must ensure:
     #   0 < X.min() < X.max() < density.shape[0]
     #   0 < Y.min() < Y.max() < density.shape[1]
-    
+
     xmin, xmax = 0, density.shape[1]
     ymin, ymax = 0, density.shape[0]
     bbox = np.array([xmin, xmax, ymin, ymax])
