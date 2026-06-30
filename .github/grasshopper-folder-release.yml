@@ -1,0 +1,177 @@
+name: Grasshopper Folder Release
+
+on:
+  push:
+    paths:
+      - 'grasshopper_release/**'
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: write  # required for release creation
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all tags
+
+      - name: Try to infer version from .gh filename
+        id: infer_version
+        run: |
+          version_found=false
+          
+          # Look for all .gh files in grasshopper_release folder
+          gh_files=$(find grasshopper_release -maxdepth 1 -name "*.gh" -type f || true)
+          
+          if [ -z "$gh_files" ]; then
+            echo "No .gh file found in grasshopper_release folder"
+            echo "version_found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Found .gh files:"
+          echo "$gh_files"
+          
+          # Find the file with the highest version number in its name
+          # We'll process each file and keep track of the one with the highest version
+          best_file=""
+          best_version=""
+          
+          while IFS= read -r gh_file; do
+            [ -z "$gh_file" ] && continue
+            
+            filename=$(basename "$gh_file" .gh)
+            echo "Checking file: $filename"
+            
+            # Extract version pattern from the end of filename first (preferred)
+            version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' || echo "")
+            
+            # If no match at end, try matching any version pattern as fallback
+            if [ -z "$version_match" ]; then
+              version_match=$(echo "$filename" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?' | tail -n 1 || echo "")
+            fi
+            
+            if [ -n "$version_match" ]; then
+              # Normalize to 4-part version for comparison
+              normalized_version="$version_match"
+              dot_count=$(echo "$version_match" | tr -cd '.' | wc -c)
+              if [ "$dot_count" -eq 2 ]; then
+                normalized_version="${version_match}.0"
+              fi
+              
+              echo "  Found version: $normalized_version"
+              
+              # Compare versions (using sort -V for version sorting)
+              if [ -z "$best_version" ] || [ "$(echo -e "$best_version\n$normalized_version" | sort -V -r | head -n 1)" = "$normalized_version" ]; then
+                best_version="$normalized_version"
+                best_file="$gh_file"
+              fi
+            fi
+          done <<< "$gh_files"
+          
+          if [ -n "$best_file" ] && [ -n "$best_version" ]; then
+            # Convert to tag format (gh prefix)
+            inferred_version="gh$best_version"
+            
+            echo "Selected file: $(basename "$best_file")"
+            echo "Inferred version: $inferred_version"
+            echo "inferred_version=$inferred_version" >> $GITHUB_OUTPUT
+            version_found=true
+          else
+            # Fallback: use the most recently modified file if no version found
+            gh_file=$(echo "$gh_files" | xargs ls -t | head -n 1 || echo "")
+            if [ -n "$gh_file" ]; then
+              filename=$(basename "$gh_file" .gh)
+              echo "No version found in any filename, using most recent file: $filename"
+              echo "This will fall back to bump-patch versioning"
+            fi
+          fi
+          
+          # Always set version_found output
+          if [ "$version_found" = "true" ]; then
+            echo "version_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "version_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest version tag (fallback)
+        id: get_tag
+        if: steps.infer_version.outputs.version_found != 'true'
+        run: |
+          latest_tag=$(git tag --list 'gh*' --sort=-v:refname | grep -E '^gh[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          if [ -z "$latest_tag" ]; then
+            latest_tag="gh0.0.0.0"
+          fi
+          echo "latest_tag=$latest_tag" >> $GITHUB_OUTPUT
+
+      - name: Calculate version and filenames
+        id: version
+        run: |
+          echo "version_found output: '${{ steps.infer_version.outputs.version_found }}'"
+          
+          # Use inferred version if available, otherwise bump patch version
+          if [ "${{ steps.infer_version.outputs.version_found }}" = "true" ]; then
+            echo "Using inferred version from filename"
+            new_version="${{ steps.infer_version.outputs.inferred_version }}"
+          else
+            echo "Falling back to bump patch version"
+            # Fallback: bump patch version
+            latest="${{ steps.get_tag.outputs.latest_tag }}"
+            version=${latest#gh}
+            IFS='.' read -r major minor patch build <<< "$version"
+            build=$((build + 1))
+            new_version="gh$major.$minor.$patch.$build"
+          fi
+          
+          echo "Final version: $new_version"
+          
+          release_name="DDU CSC GrasshopperInterface $new_version"
+          zip_name="ddu-csc-grasshopper-interface-${new_version}.zip"
+
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "release_name=$release_name" >> $GITHUB_OUTPUT
+          echo "zip_name=$zip_name" >> $GITHUB_OUTPUT
+
+      # - name: Generate release notes from commit messages
+      #   id: release_notes
+      #   run: |
+      #     release_notes=$(git log "${{ steps.get_tag.outputs.latest_tag }}"..HEAD --oneline --no-merges)
+      #     if [ -z "$release_notes" ]; then
+      #       release_notes="No significant changes."
+      #     else
+      #       # Format commit messages into a bulleted list
+      #       release_notes=$(echo "$release_notes" | sed 's/^/- /')
+      #     fi
+      #     # Replace newlines with the literal string '\n' for proper multi-line formatting in GitHub Actions
+      #     release_notes="${release_notes//$'\n'/'\n'}"
+      #     echo "release_notes=$release_notes" >> $GITHUB_OUTPUT
+
+      - name: Prepare and zip the release folder
+        run: |
+          display_name="Stippler Grasshopper Plug-In ${{ steps.version.outputs.new_version }}"
+          mkdir "$display_name"
+          cp -r grasshopper_release/* "$display_name/"
+          cp -r grasshopper_userobjects "$display_name/UserObjects"
+          cp README.md "$display_name/"
+          cp LICENSE "$display_name/"
+          zip -r "${{ steps.version.outputs.zip_name }}" "$display_name"
+          rm -rf "$display_name"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.new_version }}
+          name: ${{ steps.version.outputs.release_name }}
+          files: ${{ steps.version.outputs.zip_name }}
+          body: |
+            ### Release Notes
+            New Release of the Stippler Grasshopper Plug-In
+        env:
+          GITHUB_TOKEN: ${{ secrets.STIPPLER_GH_RELEASE }}
