@@ -53,22 +53,16 @@ Original data is in the data directory and you can also obtain it from
 
 ## Installation
 
-Install from PyPI:
+Install from [PyPI](https://pypi.org/project/stippler/):
 
 ```
 pip install stippler
 ```
 
-Or from a local clone (editable install for development):
+For local development from a clone:
 
 ```
 pip install -e .
-```
-
-Or directly from GitHub:
-
-```
-pip install "git+https://github.com/fstwn/stippler.git@main"
 ```
 
 This installs the dependencies (numpy, scipy, Pillow, tqdm, matplotlib), the
