@@ -1,7 +1,8 @@
 
 # Weighted Voronoi Stippling
 
-![](../data/boots-stipple.png)
+![](../data/original/donut.png)
+![](../data/donut_stippled.png)
 
 This is a replication of the following article:
 
@@ -14,15 +15,23 @@ grayscale images using weighted centroidal Voronoi diagrams* as in *the
 traditional artistic technique of stippling that places small dots of ink onto
 paper such that their density give the impression of tone*.
 
+## Authors and credits
+
+* **Original replication** — Nicolas P. Rougier (BSD license, 2017), replicating
+  Adrian Secord, *Weighted Voronoi Stippling*, NPAR 2002.
+* **Python 3.9.10 port, revised hand-drawn stippling pipeline, Lu et al.
+  scientific-illustration extensions, and Grasshopper / Rhino integration** —
+  Max Benjamin Eschenbach.
+
 
 ## Pre-requisites
 
-This replication was originally written and tested on OSX 10.12 (Sierra) using
+The original replication was written and tested on OSX 10.12 (Sierra) using
 Python 3.6, Numpy 1.12, Scipy 0.18, Matplotlib 2.0 and tqdm 4.10.
 
-This branch ports the code to **Python 3.9.10** so it is compatible with the
-Rhino 8 CPython runtime. The only source-level change required was replacing the
-removed `scipy.misc.imread` with a small Pillow-based loader; everything else is
+This revision ports and extends that code for **Python 3.9.10**, matching the
+Rhino 8 / Grasshopper CPython runtime. The port replaces the removed
+`scipy.misc.imread` with a small Pillow-based loader; the compute core remains
 plain numpy / `scipy.spatial`. It has been verified with:
 
  * Python 3.9.10
@@ -132,3 +141,41 @@ The pipeline can also be imported as a library: `stippler.stipple(...)` returns
 a `StippleResult` carrying `points`, `radii` and per-dot `polygons` (handy for
 feeding geometry into Rhino later), which `render_matplotlib`, `render_svg` and
 `save_points` consume.
+
+## Scientific-illustration pipeline (Lu et al.)
+
+The hand-drawn pipeline is further extended with optional controls adapted from
+Lu et al., *Non-Photorealistic Volume Rendering Using Stippling Techniques*
+([`resources/vis_stipple.pdf`](../resources/vis_stipple.pdf)). Each feature is
+independently toggled via `IllustrationParams` (library) or the CLI
+`illustration` argument group (`stippler --help`):
+
+* **Boundary** — boost stipple density on high-gradient edges.
+* **Silhouette density** — concentrate dots on view-facing silhouette regions
+  (uses an optional normal map).
+* **Interior** — sparse stipples in flat, low-gradient areas.
+* **Lighting** — modulate density from inferred or supplied normals.
+* **Depth attenuation** — thin stipples in far regions (requires a depth map).
+* **Gradient size** — scale dot radius by local gradient magnitude.
+* **Silhouette curves** — extract and draw feature-line strokes over the dots.
+
+Normal and depth maps should be aligned with the beauty-pass image. In Rhino,
+the Grasshopper component can capture these automatically when the options that
+need them are enabled.
+
+## Grasshopper / Rhino integration
+
+Max Benjamin Eschenbach integrated the revised pipeline into Grasshopper for
+Rhino 8 CPython 3.9.10:
+
+* **`grasshopper_userobjects/STIPPLER_StippledViewCapture.ghuser`** — drop-in
+  user object that captures the active viewport and writes a `_stippled` output
+  (PNG, SVG, or PDF), including hand-drawn controls and the Lu et al. options
+  above.
+* **`grasshopper_userobjects_src/`** — Python 3 script source and input/output
+  reference. Re-export the user object from Grasshopper after editing the script
+  (right-click → **Save User Object…**).
+
+Install the `stippler` package into the Rhino CPython environment the component
+uses (see Installation above), then paste or sync the script into a GH Python 3
+component.

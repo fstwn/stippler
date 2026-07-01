@@ -12,6 +12,9 @@ license = { file = "LICENSE.txt" }
 authors = [
     { name = "Nicolas P. Rougier" },
 ]
+maintainers = [
+    { name = "Max Benjamin Eschenbach" },
+]
 keywords = ["stippling", "voronoi", "halftone", "rhino", "grasshopper", "npar"]
 classifiers = [
     "Programming Language :: Python :: 3",
