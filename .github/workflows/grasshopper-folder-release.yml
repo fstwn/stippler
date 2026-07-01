@@ -5,7 +5,7 @@ on:
     paths:
       - 'grasshopper_release/**'
     branches:
-      - main
+      - python39-rhino-port
 
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Fetch all tags
 

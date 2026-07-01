@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve version
         id: version
@@ -48,7 +48,7 @@ jobs:
           sed -i 's/^__version__ = .*/__version__ = "${{ steps.version.outputs.version }}"/' src/stippler/__init__.py
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
