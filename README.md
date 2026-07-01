@@ -53,19 +53,22 @@ Original data is in the data directory and you can also obtain it from
 
 ## Installation
 
-The package lives in the `code/` subdirectory and is pip-installable as
-`stippler`. Install it from GitHub with the `subdirectory` fragment, pinning
-the branch after `@`:
+Install from PyPI:
 
 ```
-pip install "git+https://github.com/fstwn/stippler.git@python39-rhino-port#subdirectory=code"
+pip install stippler
 ```
 
-(Replace the owner with your own fork if you pushed the branch there.) Or, from
-a local clone:
+Or from a local clone (editable install for development):
 
 ```
-pip install ./code            # or: pip install -e ./code   (editable)
+pip install -e .
+```
+
+Or directly from GitHub:
+
+```
+pip install "git+https://github.com/fstwn/stippler.git@main"
 ```
 
 This installs the dependencies (numpy, scipy, Pillow, tqdm, matplotlib), the

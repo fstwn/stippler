@@ -160,7 +160,7 @@ jobs:
           cp -r grasshopper_release/* "$display_name/"
           cp -r grasshopper_userobjects "$display_name/UserObjects"
           cp README.md "$display_name/"
-          cp LICENSE "$display_name/"
+          cp LICENSE.txt "$display_name/"
           zip -r "${{ steps.version.outputs.zip_name }}" "$display_name"
           rm -rf "$display_name"
 

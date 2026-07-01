@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stippler"
-version = "0.2.0.0"
+dynamic = ["version"]
 description = "Hand-drawn weighted Voronoi stippling pipeline (Python 3.9.10 / Rhino CPython compatible)"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { file = "LICENSE.txt" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt"]
 authors = [
     { name = "Nicolas P. Rougier" },
 ]
@@ -19,7 +20,6 @@ keywords = ["stippling", "voronoi", "halftone", "rhino", "grasshopper", "npar"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
-    "License :: OSI Approved :: BSD License",
     "Topic :: Multimedia :: Graphics",
 ]
 dependencies = [
@@ -30,9 +30,17 @@ dependencies = [
     "matplotlib",
 ]
 
+[project.urls]
+Homepage = "https://github.com/fstwn/stippler"
+Repository = "https://github.com/fstwn/stippler"
+Documentation = "https://github.com/fstwn/stippler#readme"
+"Bug Tracker" = "https://github.com/fstwn/stippler/issues"
+
 [project.scripts]
 stippler = "stippler.pipeline:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["stippler*"]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "stippler.__version__" }

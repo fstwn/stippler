@@ -24,9 +24,9 @@ from pathlib import Path
 
 # Allow running without pip install when executed from the repo checkout.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_CODE_DIR = _REPO_ROOT / "code"
-if str(_CODE_DIR) not in sys.path:
-    sys.path.insert(0, str(_CODE_DIR))
+_SRC_DIR = _REPO_ROOT / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 from stippler import render_matplotlib, stipple  # NOQA: E402
 
