@@ -36,16 +36,23 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Resolve version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            tag="${{ github.event.release.tag_name }}"
-            version="${tag#gh}"
+            version="${{ github.event.release.tag_name }}"
           elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-            tag=$(git tag --list 'gh*' --sort=-v:refname | grep -E '^gh[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
-            version="${tag#gh}"
+            version=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+            if [ -z "$version" ]; then
+              version=$(git tag --list --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+            fi
+            if [ -z "$version" ]; then
+              version=$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName -q '.[0].tagName')
+            fi
           else
             version="${{ inputs.version }}"
           fi
