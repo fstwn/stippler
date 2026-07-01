@@ -1,8 +1,8 @@
 
 # Rhino Grasshopper-Compatible Stippling Processor
 
-![](data/original/donut.png)
-![](data/donut_stippled.png)
+![](data/donut.png)
+![](data/donut-stipple.png)
 
 
 This is a replication of the following article:
