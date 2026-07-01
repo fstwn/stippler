@@ -2,7 +2,9 @@
 # Rhino Grasshopper-Compatible Stippling Processor
 
 ![](data/donut-montage.png)
+*for parameters used here, see [Example Parameters](#example-parameters)*
 
+---
 
 This is a replication of the following article:
 
@@ -176,3 +178,29 @@ Rhino 8 CPython 3.9.10:
 Install the `stippler` package into the Rhino CPython environment the component
 uses (see Installation above), then paste or sync the script into a GH Python 3
 component.
+
+## Example Parameters
+
+**Parameters used for the Donut example**
+
+| Parameter | Value |
+|---|---|
+| Resolution | 1920 x 1080 px |
+| NumDots | 100000 |
+| Iterations | 12 |
+| Gamma | 1.0 |
+| RMin | 1.0 |
+| RMax | 6.0 |
+| SizeJitter | 0.15 |
+| PositionJitter | 0.1 |
+| EdgeNoise | 0.1 |
+| Seed | 42 |
+| DPI | 300 |
+| Boundary | `false` |
+| SilhouetteDensity | `false` |
+| Interior | `false` |
+| Lighting | `false` |
+| DepthAttenuation | `false` |
+| GradientSize | `false` |
+| SilhouetteCurves | `true` |
+| CurveWidth | 0.5 |
