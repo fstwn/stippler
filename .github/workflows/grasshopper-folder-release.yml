@@ -127,13 +127,13 @@ jobs:
             version=${latest#gh}
             IFS='.' read -r major minor patch build <<< "$version"
             build=$((build + 1))
-            new_version="gh$major.$minor.$patch.$build"
+            new_version="$major.$minor.$patch.$build"
           fi
           
           echo "Final version: $new_version"
           
-          release_name="DDU CSC GrasshopperInterface $new_version"
-          zip_name="ddu-csc-grasshopper-interface-${new_version}.zip"
+          release_name="Stippler $new_version"
+          zip_name="stippler-${new_version}.zip"
 
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
           echo "release_name=$release_name" >> $GITHUB_OUTPUT
