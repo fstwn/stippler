@@ -1,7 +1,13 @@
 name: Publish to PyPI
 
 on:
-  # Runs after the Grasshopper release workflow creates a GitHub Release.
+  # Primary chain: runs when the Grasshopper release workflow succeeds.
+  workflow_run:
+    workflows: ["Grasshopper Folder Release"]
+    types: [completed]
+    branches: [python39-rhino-port]
+
+  # Also runs when a PAT-authored release fires release:published.
   release:
     types: [published]
 
@@ -18,18 +24,27 @@ permissions:
 
 jobs:
   publish:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: pypi
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          fetch-depth: 0
 
       - name: Resolve version
         id: version
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             tag="${{ github.event.release.tag_name }}"
+            version="${tag#gh}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            tag=$(git tag --list 'gh*' --sort=-v:refname | grep -E '^gh[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
             version="${tag#gh}"
           else
             version="${{ inputs.version }}"

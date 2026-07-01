@@ -164,9 +164,11 @@ jobs:
           rm -rf "$display_name"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v6
         with:
-          token: ${{ secrets.STIPPLER_GH_RELEASE }}
+          # PAT (STIPPLER_GH_RELEASE) lets release:published reach other workflows.
+          # Falls back to github.token so releases still work if the secret is unset.
+          token: ${{ secrets.STIPPLER_GH_RELEASE || github.token }}
           tag_name: ${{ steps.version.outputs.new_version }}
           name: ${{ steps.version.outputs.release_name }}
           files: ${{ steps.version.outputs.zip_name }}
