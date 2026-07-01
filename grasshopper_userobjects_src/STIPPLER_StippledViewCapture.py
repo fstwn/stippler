@@ -3,7 +3,7 @@
 # venv: STIPPLER
 print('ENV OK!')
 # r: charset_normalizer
-# r: git+https://github.com/fstwn/stippler.git@python39-rhino-port#subdirectory=code
+# r: stippler
 
 
 # PYTHON STANDARD LIBRARY IMPORTS ---------------------------------------------
@@ -49,7 +49,7 @@ class StippledViewCapture(Grasshopper.Kernel.GH_ScriptInstance):
     """
     Author: Max Benjamin Eschenbach
     License: MIT License
-    Version: 260630
+    Version: 260701
     """
 
     def __init__(self):
